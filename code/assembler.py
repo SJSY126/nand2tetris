@@ -16,11 +16,11 @@ class Parser():
 
     def advance(self):
         while True:
-            command = self.commands[self.nowline].rstrip()
+            command = self.commands[self.nowline].rstrip().replace(" ", "")
             self.nowline += 1
             if command != "" and command[:2] != "//":
                 if "//" in command:
-                    self.nowcommand = command[command.find("//")].rstrip()
+                    self.nowcommand = command[:command.find("//")].rstrip()
                 else:
                     self.nowcommand = command
                 break
@@ -129,15 +129,66 @@ class Code():
         return self.jump_dic[mnemonic]
 
 
+class SymbolTable():
+    def __init__(self):
+        self.symbol_dic = {
+            "SP": 0,
+            "LCL": 1,
+            "ARG": 2,
+            "THIS": 3,
+            "THAT": 4,
+            "SCREEN": 16384,
+            "KBD": 24576
+        }
+        for i in range(16):
+            label = "R" + str(i)
+            self.symbol_dic[label] = i
+
+    def add_entry(self, symbol, address):
+        self.symbol_dic[symbol] = address
+
+    def contains(self, symbol):
+        if symbol in self.symbol_dic.keys():
+            return True
+        else:
+            return False
+
+    def get_address(self, symbol):
+        return self.symbol_dic[symbol]
+
+
 def main(filename):
+    s = SymbolTable()
     p = Parser(filename)
     c = Code()
+    pc = 0
+    while p.has_more_commands():
+        p.advance()
+        if p.command_type() == "A_COMMAND" or p.command_type() == "C_COMMAND":
+            pc += 1
+        elif p.command_type() == "L_COMMAND":
+            if not s.contains(p.symbol()):
+                s.add_entry(p.symbol(), pc)
+        else:
+            pass
+
+    p = Parser(filename)
     output = []
+    ram_address = 16
     while p.has_more_commands():
         p.advance()
         if p.command_type() == "A_COMMAND":
+            if not p.symbol()[0].isdigit():
+                if not s.contains(p.symbol()):
+                    s.add_entry(p.symbol(), ram_address)
+                    ram_address += 1
+
+                sym = s.get_address(p.symbol())
+            else:
+                sym = int(p.symbol())
+
             # print("@"+p.symbol())
-            bin = "0"+format(int(p.symbol()), "015b")
+            bin = "0"+format(sym, "015b")
             # print(bin)
             output.append(bin+"\n")
         elif p.command_type() == "L_COMMAND":
@@ -158,5 +209,6 @@ def main(filename):
 
 if __name__ == "__main__":
     filename = sys.argv[1]
+    #filename = "./projects/06/pong/Pong.asm"
     print(filename)
     main(filename)
